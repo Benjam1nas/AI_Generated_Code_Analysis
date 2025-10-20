@@ -6,25 +6,42 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from models import Reservation
 from django.utils import timezone
+from django.core.exceptions import ValidationError
+
+
+def create_user_account(username, email, password, first_name, last_name):
+    """Pagalbinė funkcija vartotojo sukūrimui su patikrinimu."""
+    if User.objects.filter(username=username).exists():
+        raise ValidationError("This username is already taken.")
+    
+    user = User.objects.create_user(username=username, email=email, password=password)
+    user.first_name = first_name
+    user.last_name = last_name
+    user.save()
+    return user
 
 def register(request):
+    """Naudotojo registracijos peržiūra su loginės logikos atskyrimu."""
     if request.method == "POST":
-        username = request.POST['username']
-        password = request.POST['password']
-        name = request.POST['name']
-        lastname = request.POST['lastname']
-        email = request.POST['email']
-        
-    
-        if User.objects.filter(username=username).exists():
-            messages.error(request, "This username is already taken. Please choose a different one.")
+        data = request.POST
+        try:
+            user = create_user_account(
+                username=data.get('username'),
+                email=data.get('email'),
+                password=data.get('password'),
+                first_name=data.get('name'),
+                last_name=data.get('lastname'),
+            )
+            messages.success(request, f"Account created for {user.username}! You can now log in.")
+            return redirect('login')
+
+        except ValidationError as e:
+            messages.error(request, str(e))
             return redirect('register')
-        
-        user = User.objects.create_user(username, email, password)
-        user.first_name = name
-        user.last_name = lastname
-        user.save()
-        return redirect('login')
+        except Exception:
+            messages.error(request, "Unexpected error occurred during registration.")
+            return redirect('register')
+
     return render(request, 'users/register.html')
 
 def login_view(request):
